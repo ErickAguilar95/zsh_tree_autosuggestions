@@ -154,49 +154,6 @@ zsh_tree_autosuggestions/
 
 Oh My Zsh carga automaticamente el archivo `zsh_tree_autosuggestions.plugin.zsh` cuando el nombre del plugin aparece en `plugins=(...)`.
 
-## Subirlo a GitHub
-
-Si este plugin esta dentro de `~/.oh-my-zsh/custom/plugins`, lo mas limpio es convertir esta carpeta en un repo independiente.
-
-Desde esta carpeta:
-
-```zsh
-cd ~/.oh-my-zsh/custom/plugins/zsh_tree_autosuggestions
-git init
-git add README.md zsh_tree_autosuggestions.plugin.zsh
-git commit -m "Initial release"
-```
-
-Crea un repositorio nuevo en GitHub llamado `zsh_tree_autosuggestions`. Despues conecta tu repo local con GitHub:
-
-```zsh
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/zsh_tree_autosuggestions.git
-git push -u origin main
-```
-
-Si Git te dice que ya existe un remoto llamado `origin`, revisalo con:
-
-```zsh
-git remote -v
-```
-
-Y cambialo al repo correcto:
-
-```zsh
-git remote set-url origin https://github.com/TU_USUARIO/zsh_tree_autosuggestions.git
-```
-
-## Actualizar el plugin en otro equipo
-
-En el equipo donde ya este instalado:
-
-```zsh
-cd ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh_tree_autosuggestions
-git pull
-source ~/.zshrc
-```
-
 ## Desinstalacion
 
 Quita `zsh_tree_autosuggestions` de la lista `plugins=(...)` en `~/.zshrc` y elimina la carpeta:
