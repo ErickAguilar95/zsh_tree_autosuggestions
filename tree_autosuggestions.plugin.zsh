@@ -31,6 +31,9 @@ typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
 (( ! ${+ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL} )) &&
 typeset -g ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
 
+(( ! ${+ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT} )) &&
+typeset -g ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
+
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS
@@ -39,6 +42,7 @@ typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_KIND
+typeset -gA _ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE
 typeset -gi _ZSH_TREE_AUTOSUGGEST_VISIBLE=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_SELECTED=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_SCROLL=0
@@ -46,6 +50,7 @@ typeset -g _ZSH_TREE_AUTOSUGGEST_LAST_BUFFER=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_PANEL_POSITION=below
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_PREDISPLAY=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_POSTDISPLAY=''
+typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_KEYTIMEOUT=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_UP_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_DOWN_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_RIGHT_WIDGET=''
@@ -62,40 +67,36 @@ typeset -gi _ZSH_TREE_AUTOSUGGEST_HAS_DISPLAY=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_INIT=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_FINISH=0
 
-_zsh_tree_autosuggest_min() {
-	emulate -L zsh
-	(( $1 < $2 )) && print -r -- "$1" || print -r -- "$2"
-}
-
 _zsh_tree_autosuggest_strip_ansi() {
 	emulate -L zsh
 	local text="$1"
 	print -r -- "${text//$'\033'\[[0-9;]##[A-Za-z]/}"
 }
 
-_zsh_tree_autosuggest_truncate() {
+_zsh_tree_autosuggest_truncate_reply() {
 	emulate -L zsh
 	local text="$1"
 	local -i width="$2"
 	local -i end
 
+	REPLY=''
 	(( width <= 0 )) && return
-	[[ -z "$text" ]] && return
 
 	if (( $#text <= width )); then
-		print -r -- "$text"
+		REPLY="$text"
 	elif (( width > 1 )); then
 		end=$(( width - 1 ))
-		print -r -- "${text[1,$end]}>"
+		REPLY="${text[1,$end]}>"
 	else
-		print -r -- "${text[1,1]}"
+		REPLY="${text[1,1]}"
 	fi
 }
 
 _zsh_tree_autosuggest_unique_push() {
 	emulate -L zsh
+	setopt local_options extended_glob
 	local array_name="$1"
-	local value="$(_zsh_tree_autosuggest_normalize_suggestion_key "$2")"
+	local value="${2%%[[:space:]]##}"
 	local item
 
 	[[ -z "$value" ]] && return
@@ -103,24 +104,17 @@ _zsh_tree_autosuggest_unique_push() {
 	case "$array_name" in
 		_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS)
 			for item in "${_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS[@]}"; do
-				[[ "$(_zsh_tree_autosuggest_normalize_suggestion_key "$item")" == "$value" ]] && return
+				[[ "${item%%[[:space:]]##}" == "$value" ]] && return
 			done
 			_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS+=( "$value" )
 			;;
 		_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS)
 			for item in "${_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS[@]}"; do
-				[[ "$(_zsh_tree_autosuggest_normalize_suggestion_key "$item")" == "$value" ]] && return
+				[[ "${item%%[[:space:]]##}" == "$value" ]] && return
 			done
 			_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS+=( "$value" )
 			;;
 	esac
-}
-
-_zsh_tree_autosuggest_normalize_suggestion_key() {
-	emulate -L zsh
-	setopt local_options extended_glob
-	local value="$1"
-	print -r -- "${value%%[[:space:]]##}"
 }
 
 _zsh_tree_autosuggest_current_token() {
@@ -149,13 +143,25 @@ _zsh_tree_autosuggest_command_is_valid() {
 			return 1
 		fi
 
+		if [[ -n "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" ]]; then
+			[[ "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" == 1 ]]
+			return
+		fi
+
 		(( ${+commands[$command]} ||
 		   ${+builtins[$command]} ||
 		   ${+functions[$command]} ||
 		   ${+aliases[$command]} ||
-		   ${reswords[(Ie)$command]} )) && return 0
+		   ${reswords[(Ie)$command]} )) && {
+			_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
+			return 0
+		}
 
-		whence -w "$command" >/dev/null 2>&1 && return 0
+		if whence -w "$command" >/dev/null 2>&1; then
+			_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
+			return 0
+		fi
+		_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=0
 		return 1
 	done
 
@@ -383,24 +389,10 @@ _zsh_tree_autosuggest_collect_tab() {
 	_zsh_tree_autosuggest_collect_tab_commands
 }
 
-_zsh_tree_autosuggest_first_selectable() {
-	emulate -L zsh
-	local -i index
-
-	for index in {1..${#_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE}}; do
-		if (( _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[index] )); then
-			print -r -- "$index"
-			return
-		fi
-	done
-
-	print -r -- 0
-}
-
 _zsh_tree_autosuggest_build_entries() {
 	emulate -L zsh
 	local item value
-	local -i index
+	local -i index first_selectable=0
 
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT=()
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE=()
@@ -421,6 +413,7 @@ _zsh_tree_autosuggest_build_entries() {
 			if [[ -n "$value" ]]; then
 				_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
 				_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "cd-tree" )
+				(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 			else
 				_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 0 )
 				_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "preview" )
@@ -439,6 +432,7 @@ _zsh_tree_autosuggest_build_entries() {
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$item" )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "item" )
+			(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 		done
 	fi
 
@@ -453,6 +447,7 @@ _zsh_tree_autosuggest_build_entries() {
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$item" )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "item" )
+			(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 		done
 	fi
 
@@ -465,7 +460,7 @@ _zsh_tree_autosuggest_build_entries() {
 	if (( _ZSH_TREE_AUTOSUGGEST_SELECTED < 1 ||
 	      _ZSH_TREE_AUTOSUGGEST_SELECTED > ${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT} ||
 	      ! _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[_ZSH_TREE_AUTOSUGGEST_SELECTED] )); then
-		_ZSH_TREE_AUTOSUGGEST_SELECTED="$(_zsh_tree_autosuggest_first_selectable)"
+		_ZSH_TREE_AUTOSUGGEST_SELECTED="$first_selectable"
 	fi
 }
 
@@ -529,7 +524,7 @@ _zsh_tree_autosuggest_render_panel() {
 	(( width < min_width )) && width=$min_width
 	(( max_rows < 1 )) && max_rows=1
 
-	visible_rows="$(_zsh_tree_autosuggest_min "$max_rows" "$total")"
+	(( max_rows < total )) && visible_rows="$max_rows" || visible_rows="$total"
 	_zsh_tree_autosuggest_adjust_scroll
 
 	start=$(( _ZSH_TREE_AUTOSUGGEST_SCROLL + 1 ))
@@ -543,13 +538,14 @@ _zsh_tree_autosuggest_render_panel() {
 	for index in {$start..$end}; do
 		text="${_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT[index]}"
 
-			if (( _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[index] )); then
-				if (( index == _ZSH_TREE_AUTOSUGGEST_SELECTED )); then
-					marker="→ "
-				else
-					marker="  "
-				fi
-			plain="$marker$(_zsh_tree_autosuggest_truncate "$text" $(( width - 2 )))"
+		if (( _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[index] )); then
+			if (( index == _ZSH_TREE_AUTOSUGGEST_SELECTED )); then
+				marker="> "
+			else
+				marker="  "
+			fi
+			_zsh_tree_autosuggest_truncate_reply "$text" $(( width - 2 ))
+			plain="$marker$REPLY"
 		elif [[ "${_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND[index]}" == header ]]; then
 			plain="-- $text "
 			plain="${plain}${(l:$(( width - $#plain ))::-:)}"
@@ -557,7 +553,8 @@ _zsh_tree_autosuggest_render_panel() {
 			plain="$text"
 		fi
 
-		plain="$(_zsh_tree_autosuggest_truncate "$plain" "$width")"
+		_zsh_tree_autosuggest_truncate_reply "$plain" "$width"
+		plain="$REPLY"
 		line="${border_v}${(r:$width:: :)plain}${border_v}"
 		lines+=( "$line" )
 	done
@@ -609,9 +606,14 @@ _zsh_tree_autosuggest_clear() {
 
 _zsh_tree_autosuggest_draw() {
 	emulate -L zsh
-	local panel
 
 	_zsh_tree_autosuggest_build_entries
+	_zsh_tree_autosuggest_redraw
+}
+
+_zsh_tree_autosuggest_redraw() {
+	emulate -L zsh
+	local panel
 
 	if (( ! ${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT} )); then
 		_zsh_tree_autosuggest_clear
@@ -665,8 +667,7 @@ _zsh_tree_autosuggest_select_relative() {
 	local -i total="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 	local -i attempts=0
 
-	(( _ZSH_TREE_AUTOSUGGEST_VISIBLE && total )) || return 1
-	(( $(_zsh_tree_autosuggest_first_selectable) > 0 )) || return 1
+	(( _ZSH_TREE_AUTOSUGGEST_VISIBLE && total && _ZSH_TREE_AUTOSUGGEST_SELECTED > 0 )) || return 1
 
 	while (( attempts < total )); do
 		(( attempts++ ))
@@ -677,7 +678,7 @@ _zsh_tree_autosuggest_select_relative() {
 
 		if (( _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[index] )); then
 			_ZSH_TREE_AUTOSUGGEST_SELECTED="$index"
-			_zsh_tree_autosuggest_draw
+			_zsh_tree_autosuggest_redraw
 			return 0
 		fi
 
@@ -944,6 +945,12 @@ bindkey '^[[A' tree-autosuggest-up
 bindkey '^[[B' tree-autosuggest-down
 bindkey '^[[C' tree-autosuggest-forward-char
 bindkey '^[' tree-autosuggest-escape
+
+if [[ "$ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT" == <-> ]]; then
+	_ZSH_TREE_AUTOSUGGEST_ORIG_KEYTIMEOUT="$KEYTIMEOUT"
+	(( KEYTIMEOUT > ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT )) &&
+		KEYTIMEOUT="$ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT"
+fi
 
 zle -N self-insert _zsh_tree_autosuggest_self_insert
 

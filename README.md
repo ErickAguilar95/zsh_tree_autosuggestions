@@ -11,6 +11,7 @@ Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escr
 - Usa las teclas de flecha para moverte por el panel.
 - Acepta una sugerencia con `Right` o `Enter`.
 - Cierra el panel con `Esc`.
+- Reduce el delay de teclas como `Esc` y flechas ajustando `KEYTIMEOUT`.
 
 ## Requisitos
 
@@ -82,6 +83,7 @@ ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT=50
 ZSH_TREE_AUTOSUGGEST_BORDER_STYLE=single
 ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
 ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
+ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
 ```
 
 Ejemplo:
@@ -110,6 +112,7 @@ Opciones disponibles:
 | `ZSH_TREE_AUTOSUGGEST_BORDER_STYLE` | `single` | Estilo del borde del panel. |
 | `ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK` | `1` | Activa o desactiva la revision de actualizaciones del plugin. |
 | `ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL` | `86400` | Tiempo minimo entre revisiones, en segundos. |
+| `ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
 
 Usa `0` para desactivar opciones booleanas:
 
