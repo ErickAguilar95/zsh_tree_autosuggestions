@@ -9,7 +9,9 @@ Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escr
 - Permite usar `Tab` para abrir sugerencias de completado.
 - Muestra una vista tipo arbol cuando el contexto es `cd`, para elegir carpetas de forma visual.
 - Usa las teclas de flecha para moverte por el panel.
+- Mantiene lo que estas escribiendo como primera opcion del panel.
 - Acepta una sugerencia con `Right` o `Enter`.
+- Completa la siguiente palabra de la sugerencia seleccionada con `Ctrl` + `Right` o `Option` + `Right` en macOS.
 - Cierra el panel con `Esc`.
 - Reduce el delay de teclas como `Esc` y flechas ajustando `KEYTIMEOUT`.
 
@@ -55,6 +57,7 @@ Controles principales:
 | --- | --- |
 | `Up` / `Down` | Mover la seleccion |
 | `Right` | Aceptar la sugerencia seleccionada |
+| `Ctrl` + `Right` / `Option` + `Right` | Completar la siguiente palabra de la sugerencia seleccionada |
 | `Enter` | Aceptar la sugerencia o ejecutar el comando |
 | `Tab` | Mostrar completados adicionales |
 | `Esc` | Cerrar el panel |
@@ -84,6 +87,7 @@ ZSH_TREE_AUTOSUGGEST_BORDER_STYLE=single
 ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
 ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
 ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
+ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION=1
 ```
 
 Ejemplo:
@@ -113,6 +117,7 @@ Opciones disponibles:
 | `ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK` | `1` | Activa o desactiva la revision de actualizaciones del plugin. |
 | `ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL` | `86400` | Tiempo minimo entre revisiones, en segundos. |
 | `ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
+| `ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION` | `1` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
 
 Usa `0` para desactivar opciones booleanas:
 

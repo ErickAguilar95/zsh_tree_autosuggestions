@@ -34,6 +34,9 @@ typeset -g ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
 (( ! ${+ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT} )) &&
 typeset -g ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
 
+(( ! ${+ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION} )) &&
+typeset -g ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION=1
+
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS
@@ -54,6 +57,7 @@ typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_KEYTIMEOUT=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_UP_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_DOWN_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_RIGHT_WIDGET=''
+typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_ENTER_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_TAB_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_DELETE_WIDGET=''
@@ -392,12 +396,21 @@ _zsh_tree_autosuggest_collect_tab() {
 _zsh_tree_autosuggest_build_entries() {
 	emulate -L zsh
 	local item value
-	local -i index first_selectable=0
+	local -i index first_selectable=0 has_suggestions=0
 
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT=()
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE=()
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE=()
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND=()
+
+	has_suggestions=$(( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS} ))
+	if (( ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION && has_suggestions && $#BUFFER )); then
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "$BUFFER" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$BUFFER" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "current" )
+		first_selectable=1
+	fi
 
 	if (( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} )); then
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "Listado" )
@@ -703,6 +716,56 @@ _zsh_tree_autosuggest_accept() {
 	return 1
 }
 
+_zsh_tree_autosuggest_accept_next_word() {
+	emulate -L zsh
+	local suggestion remainder ch append
+	local -i pos=1 len cut
+
+	if (( ! _ZSH_TREE_AUTOSUGGEST_VISIBLE ||
+	      _ZSH_TREE_AUTOSUGGEST_SELECTED < 1 ||
+	      ! _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[_ZSH_TREE_AUTOSUGGEST_SELECTED] )); then
+		return 1
+	fi
+
+	suggestion="${_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE[_ZSH_TREE_AUTOSUGGEST_SELECTED]}"
+	[[ -n "$suggestion" && "$suggestion" == "$BUFFER"* && "$suggestion" != "$BUFFER" ]] || return 1
+
+	remainder="${suggestion[$(( $#BUFFER + 1 )),-1]}"
+	len="$#remainder"
+	(( len )) || return 1
+
+	while (( pos <= len )); do
+		ch="${remainder[pos]}"
+		[[ "$ch" == [[:space:]] ]] || break
+		(( pos++ ))
+	done
+
+	while (( pos <= len )); do
+		ch="${remainder[pos]}"
+		[[ "$ch" != [[:space:]] ]] || break
+		(( pos++ ))
+	done
+
+	while (( pos <= len )); do
+		ch="${remainder[pos]}"
+		[[ "$ch" == [[:space:]] ]] || break
+		(( pos++ ))
+	done
+
+	cut=$(( pos - 1 ))
+	(( cut > 0 )) || return 1
+
+	append="${remainder[1,$cut]}"
+	BUFFER="${BUFFER}${append}"
+	CURSOR=$#BUFFER
+	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=()
+	_ZSH_TREE_AUTOSUGGEST_SELECTED=0
+	_ZSH_TREE_AUTOSUGGEST_SCROLL=0
+	_zsh_tree_autosuggest_collect_main
+	_zsh_tree_autosuggest_draw
+	return 0
+}
+
 _zsh_tree_autosuggest_tab() {
 	emulate -L zsh
 
@@ -775,8 +838,20 @@ _zsh_tree_autosuggest_forward_char() {
 	fi
 }
 
+_zsh_tree_autosuggest_forward_word() {
+	if ! _zsh_tree_autosuggest_accept_next_word; then
+		_zsh_tree_autosuggest_call_widget "$_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET" .forward-word
+	fi
+}
+
 _zsh_tree_autosuggest_accept_line() {
-	if ! _zsh_tree_autosuggest_accept; then
+	if (( _ZSH_TREE_AUTOSUGGEST_VISIBLE &&
+	      _ZSH_TREE_AUTOSUGGEST_SELECTED > 0 &&
+	      _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE[_ZSH_TREE_AUTOSUGGEST_SELECTED] )) &&
+	   [[ "${_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND[_ZSH_TREE_AUTOSUGGEST_SELECTED]}" == current ]]; then
+		_zsh_tree_autosuggest_clear
+		_zsh_tree_autosuggest_call_widget "$_ZSH_TREE_AUTOSUGGEST_ORIG_ENTER_WIDGET" .accept-line
+	elif ! _zsh_tree_autosuggest_accept; then
 		_zsh_tree_autosuggest_clear
 		_zsh_tree_autosuggest_call_widget "$_ZSH_TREE_AUTOSUGGEST_ORIG_ENTER_WIDGET" .accept-line
 	fi
@@ -902,6 +977,7 @@ zle -N tree-autosuggest-delete-char _zsh_tree_autosuggest_delete_char
 zle -N tree-autosuggest-up _zsh_tree_autosuggest_up
 zle -N tree-autosuggest-down _zsh_tree_autosuggest_down
 zle -N tree-autosuggest-forward-char _zsh_tree_autosuggest_forward_char
+zle -N tree-autosuggest-forward-word _zsh_tree_autosuggest_forward_word
 zle -N tree-autosuggest-accept-line _zsh_tree_autosuggest_accept_line
 zle -N tree-autosuggest-tab _zsh_tree_autosuggest_tab
 zle -N tree-autosuggest-escape _zsh_tree_autosuggest_escape
@@ -930,6 +1006,15 @@ _ZSH_TREE_AUTOSUGGEST_ORIG_DELETE_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[
 _ZSH_TREE_AUTOSUGGEST_ORIG_UP_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[A')"
 _ZSH_TREE_AUTOSUGGEST_ORIG_DOWN_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[B')"
 _ZSH_TREE_AUTOSUGGEST_ORIG_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[C')"
+_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[1;5C')"
+[[ -z "$_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET" ]] &&
+	_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[5C')"
+[[ -z "$_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET" ]] &&
+	_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[1;9C')"
+[[ -z "$_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET" ]] &&
+	_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[[1;3C')"
+[[ -z "$_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET" ]] &&
+	_ZSH_TREE_AUTOSUGGEST_ORIG_CTRL_RIGHT_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[f')"
 _ZSH_TREE_AUTOSUGGEST_ORIG_ESCAPE_WIDGET="$(_zsh_tree_autosuggest_key_widget '^[')"
 [[ "${widgets[self-insert]}" == user:* ]] &&
 	_ZSH_TREE_AUTOSUGGEST_ORIG_SELF_INSERT_WIDGET="${widgets[self-insert]#user:}"
@@ -944,6 +1029,11 @@ bindkey '^[[3~' tree-autosuggest-delete-char
 bindkey '^[[A' tree-autosuggest-up
 bindkey '^[[B' tree-autosuggest-down
 bindkey '^[[C' tree-autosuggest-forward-char
+bindkey '^[[1;5C' tree-autosuggest-forward-word
+bindkey '^[[5C' tree-autosuggest-forward-word
+bindkey '^[[1;9C' tree-autosuggest-forward-word
+bindkey '^[[1;3C' tree-autosuggest-forward-word
+bindkey '^[f' tree-autosuggest-forward-word
 bindkey '^[' tree-autosuggest-escape
 
 if [[ "$ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT" == <-> ]]; then
