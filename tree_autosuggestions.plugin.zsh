@@ -379,6 +379,53 @@ _zsh_tree_autosuggest_collect_tab_commands() {
 	done
 }
 
+_zsh_tree_autosuggest_collect_git_origin_branches() {
+	emulate -L zsh
+	local action prefix branch name
+	local -i count=0 limit="$ZSH_TREE_AUTOSUGGEST_FILE_LIMIT"
+	local -a tokens local_branches remote_branches
+	local -A seen
+
+	(( $+commands[git] || $+functions[git] )) || return 1
+	[[ -z "$RBUFFER" ]] || return 1
+	tokens=( ${(z)BUFFER} )
+	(( ${#tokens} == 3 || ${#tokens} == 4 )) || return 1
+	[[ "${tokens[1]}" == git ]] || return 1
+	[[ "${tokens[2]}" == pull || "${tokens[2]}" == push ]] || return 1
+	[[ "${tokens[3]}" == origin ]] || return 1
+
+	action="${tokens[2]}"
+	prefix="${tokens[4]}"
+	[[ -z "$prefix" || "$BUFFER" != *[[:space:]] ]] || return 1
+	[[ "$limit" == <-> ]] || limit=50
+	(( limit > 0 )) || return 1
+
+	local_branches=( "${(@f)$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)}" )
+	remote_branches=( "${(@f)$(git for-each-ref --format='%(refname:short)' refs/remotes/origin 2>/dev/null)}" )
+
+	for branch in "${local_branches[@]}"; do
+		[[ -n "$branch" ]] || continue
+		[[ -z "$prefix" || "$branch" == "$prefix"* ]] || continue
+		seen[$branch]=1
+		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "git $action origin $branch"
+		(( ++count >= limit )) && return 0
+	done
+
+	for branch in "${remote_branches[@]}"; do
+		[[ "$branch" == origin/HEAD ]] && continue
+		[[ "$branch" == origin/* ]] || continue
+		name="${branch#origin/}"
+		[[ -n "$name" ]] || continue
+		[[ -z "$prefix" || "$name" == "$prefix"* ]] || continue
+		(( ${+seen[$name]} )) && continue
+		seen[$name]=1
+		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "git $action origin $name"
+		(( ++count >= limit )) && return 0
+	done
+
+	(( count > 0 ))
+}
+
 _zsh_tree_autosuggest_collect_tab() {
 	emulate -L zsh
 	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=()
@@ -387,6 +434,7 @@ _zsh_tree_autosuggest_collect_tab() {
 
 	(( ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS )) || return
 
+	_zsh_tree_autosuggest_collect_git_origin_branches && return
 	_zsh_tree_autosuggest_collect_files
 	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=( "${_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS[@]}" )
 	_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS=()

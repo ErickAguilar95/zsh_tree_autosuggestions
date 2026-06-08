@@ -7,6 +7,7 @@ Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escr
 - Sugiere comandos recientes del historial que coinciden con lo que estas escribiendo.
 - Sugiere archivos y carpetas del directorio actual.
 - Permite usar `Tab` para abrir sugerencias de completado.
+- Completa ramas locales y remotas con `Tab` en `git pull origin` y `git push origin`.
 - Muestra una vista tipo arbol cuando el contexto es `cd`, para elegir carpetas de forma visual.
 - Usa las teclas de flecha para moverte por el panel.
 - Mantiene lo que estas escribiendo como primera opcion del panel.
@@ -62,6 +63,8 @@ Controles principales:
 | `Tab` | Mostrar completados adicionales |
 | `Esc` | Cerrar el panel |
 | `Backspace` / `Delete` | Editar y actualizar sugerencias |
+
+En repositorios Git, `Tab` despues de `git pull origin` o `git push origin` muestra ramas locales primero y ramas remotas de `origin` despues. Las remotas se insertan sin el prefijo `origin/`.
 
 Para navegar carpetas, escribe:
 
