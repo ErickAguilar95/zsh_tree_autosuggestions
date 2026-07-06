@@ -1,41 +1,86 @@
 # zsh_tree_autosuggestions
-# A pure-zsh floating suggestion panel for Oh My Zsh.
+# A floating suggestion panel for Oh My Zsh.
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_MAX_ROWS} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_MAX_ROWS=8
+typeset -g _ZSH_TREE_AUTOSUGGEST_PLUGIN_DIR="${${(%):-%x}:A:h}"
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT=50
+(( ! ${+ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE} )) &&
+typeset -g ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zsh_tree_autosuggestions/settings.json"
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_FILE_LIMIT} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_FILE_LIMIT=50
+_zsh_tree_autosuggest_load_json() {
+	emulate -L zsh
+	local settings_file="$1"
+	local assignments
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS=1
+	[[ -r "$settings_file" ]] || return
+	(( $+commands[python3] )) || return
+	assignments="$(python3 - "$settings_file" <<'PY'
+import json
+import shlex
+import sys
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE=1
+path = sys.argv[1]
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH=1
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    sys.exit(1)
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT=50
+if not isinstance(data, dict):
+    sys.exit(0)
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_BORDER_STYLE} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_BORDER_STYLE=single
+scalar_keys = {
+    "maxRows": "ZSH_TREE_AUTOSUGGEST_MAX_ROWS",
+    "historyLimit": "ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT",
+    "historySuggestionLimit": "ZSH_TREE_AUTOSUGGEST_HISTORY_SUGGESTION_LIMIT",
+    "fileLimit": "ZSH_TREE_AUTOSUGGEST_FILE_LIMIT",
+    "enableTabCompletions": "ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS",
+    "enableCdTree": "ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE",
+    "lsTreeDepth": "ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH",
+    "lsTreeLimit": "ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT",
+    "borderStyle": "ZSH_TREE_AUTOSUGGEST_BORDER_STYLE",
+    "enableUpdateCheck": "ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK",
+    "updateCheckInterval": "ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL",
+    "keyTimeout": "ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT",
+    "showTypedOption": "ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION",
+}
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
+def scalar_to_string(value):
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float, str)):
+        return str(value)
+    return None
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
+for json_key, zsh_key in scalar_keys.items():
+    if json_key not in data:
+        continue
+    value = scalar_to_string(data[json_key])
+    if value is None:
+        continue
+    print(f"typeset -g {zsh_key}={shlex.quote(value)}")
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
+prefixes = data.get("historyStopPrefixes")
+if isinstance(prefixes, list):
+    values = [scalar_to_string(item) for item in prefixes]
+    values = [item for item in values if item is not None]
+    quoted = " ".join(shlex.quote(item) for item in values)
+    print(f"typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=( {quoted} )")
 
-(( ! ${+ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION} )) &&
-typeset -g ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION=1
+snippets = data.get("customSnippets")
+if isinstance(snippets, list):
+    value = json.dumps(snippets, ensure_ascii=False, separators=(",", ":"))
+    print(f"typeset -g ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_JSON={shlex.quote(value)}")
+PY
+)" || return
+	eval "$assignments"
+}
+
+_zsh_tree_autosuggest_load_json "$_ZSH_TREE_AUTOSUGGEST_PLUGIN_DIR/example.settings.json"
+_zsh_tree_autosuggest_load_json "$ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE"
+
+(( ! ${+ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES} )) &&
+typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=()
 
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS
@@ -66,7 +111,6 @@ typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_ESCAPE_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_SELF_INSERT_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_LINE_INIT=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_LINE_FINISH=''
-typeset -g _ZSH_TREE_AUTOSUGGEST_PLUGIN_DIR="${${(%):-%x}:A:h}"
 typeset -gi _ZSH_TREE_AUTOSUGGEST_HAS_DISPLAY=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_INIT=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_FINISH=0
@@ -181,14 +225,36 @@ _zsh_tree_autosuggest_buffer_command_is_valid() {
 	_zsh_tree_autosuggest_command_is_valid "$before"
 }
 
+_zsh_tree_autosuggest_history_candidate() {
+	emulate -L zsh
+	local prefix="$1"
+	local line="$2"
+	local stop_prefix
+
+	REPLY="$line"
+
+	for stop_prefix in "${ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES[@]}"; do
+		[[ -n "$stop_prefix" && "$line" == "$stop_prefix"* ]] || continue
+
+		[[ "$stop_prefix" == "$prefix"* ]] || return 1
+		REPLY="$stop_prefix"
+		return 0
+	done
+
+	return 0
+}
+
 _zsh_tree_autosuggest_collect_history() {
 	emulate -L zsh
 	local prefix="$BUFFER"
-	local line
+	local candidate line
 	local -a history_lines
-	local -i count=0 index
+	local -i count=0 index previous_count
+	local -i limit="$ZSH_TREE_AUTOSUGGEST_HISTORY_SUGGESTION_LIMIT"
 
 	[[ -z "$prefix" ]] && return
+	[[ "$limit" == <-> ]] || limit=5
+	(( limit > 0 )) || return
 
 	history_lines=( "${(@f)$(fc -ln -$ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT 2>/dev/null)}" )
 
@@ -197,8 +263,13 @@ _zsh_tree_autosuggest_collect_history() {
 		line="${line#"${line%%[![:space:]]*}"}"
 		[[ "$line" == "$prefix"* && "$line" != "$prefix" ]] || continue
 		_zsh_tree_autosuggest_command_is_valid "$line" || continue
-		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS "$line"
-		(( ++count >= ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT )) && break
+		_zsh_tree_autosuggest_history_candidate "$prefix" "$line" || continue
+		candidate="$REPLY"
+		[[ "$candidate" != "$prefix" ]] || continue
+		previous_count=${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS}
+		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS "$candidate"
+		(( ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} > previous_count )) || continue
+		(( ++count >= limit )) && break
 	done
 }
 
@@ -379,9 +450,9 @@ _zsh_tree_autosuggest_collect_tab_commands() {
 	done
 }
 
-_zsh_tree_autosuggest_collect_git_origin_branches() {
+_zsh_tree_autosuggest_collect_git_branches() {
 	emulate -L zsh
-	local action prefix branch name
+	local action prefix branch name suggestion_prefix
 	local -i count=0 limit="$ZSH_TREE_AUTOSUGGEST_FILE_LIMIT"
 	local -a tokens local_branches remote_branches
 	local -A seen
@@ -389,13 +460,26 @@ _zsh_tree_autosuggest_collect_git_origin_branches() {
 	(( $+commands[git] || $+functions[git] )) || return 1
 	[[ -z "$RBUFFER" ]] || return 1
 	tokens=( ${(z)BUFFER} )
-	(( ${#tokens} == 3 || ${#tokens} == 4 )) || return 1
 	[[ "${tokens[1]}" == git ]] || return 1
-	[[ "${tokens[2]}" == pull || "${tokens[2]}" == push ]] || return 1
-	[[ "${tokens[3]}" == origin ]] || return 1
 
 	action="${tokens[2]}"
-	prefix="${tokens[4]}"
+	case "$action" in
+		pull|push)
+			(( ${#tokens} == 3 || ${#tokens} == 4 )) || return 1
+			[[ "${tokens[3]}" == origin ]] || return 1
+			prefix="${tokens[4]}"
+			suggestion_prefix="git $action origin"
+			;;
+		checkout)
+			(( ${#tokens} == 2 || ${#tokens} == 3 )) || return 1
+			prefix="${tokens[3]}"
+			suggestion_prefix="git checkout"
+			;;
+		*)
+			return 1
+			;;
+	esac
+
 	[[ -z "$prefix" || "$BUFFER" != *[[:space:]] ]] || return 1
 	[[ "$limit" == <-> ]] || limit=50
 	(( limit > 0 )) || return 1
@@ -407,7 +491,7 @@ _zsh_tree_autosuggest_collect_git_origin_branches() {
 		[[ -n "$branch" ]] || continue
 		[[ -z "$prefix" || "$branch" == "$prefix"* ]] || continue
 		seen[$branch]=1
-		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "git $action origin $branch"
+		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "$suggestion_prefix $branch"
 		(( ++count >= limit )) && return 0
 	done
 
@@ -419,7 +503,7 @@ _zsh_tree_autosuggest_collect_git_origin_branches() {
 		[[ -z "$prefix" || "$name" == "$prefix"* ]] || continue
 		(( ${+seen[$name]} )) && continue
 		seen[$name]=1
-		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "git $action origin $name"
+		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS "$suggestion_prefix $name"
 		(( ++count >= limit )) && return 0
 	done
 
@@ -434,7 +518,7 @@ _zsh_tree_autosuggest_collect_tab() {
 
 	(( ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS )) || return
 
-	_zsh_tree_autosuggest_collect_git_origin_branches && return
+	_zsh_tree_autosuggest_collect_git_branches && return
 	_zsh_tree_autosuggest_collect_files
 	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=( "${_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS[@]}" )
 	_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS=()

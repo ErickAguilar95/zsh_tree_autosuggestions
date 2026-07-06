@@ -1,0 +1,20 @@
+{
+  "maxRows": 8,
+  "historyLimit": 50,
+  "historySuggestionLimit": 5,
+  "fileLimit": 50,
+  "enableTabCompletions": true,
+  "enableCdTree": true,
+  "lsTreeDepth": 1,
+  "lsTreeLimit": 50,
+  "borderStyle": "single",
+  "enableUpdateCheck": true,
+  "updateCheckInterval": 86400,
+  "keyTimeout": 1,
+  "showTypedOption": true,
+  "historyStopPrefixes": [
+    "git commit -m \"",
+    "gh issue create --title "
+  ],
+  "customSnippets": []
+}

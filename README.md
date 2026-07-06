@@ -1,13 +1,13 @@
 # zsh_tree_autosuggestions
 
-Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escribes en la terminal. Esta hecho en Zsh puro y combina historial, archivos del directorio actual, completado con Tab y una vista tipo arbol para navegar carpetas con `cd`.
+Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escribes en la terminal. Esta hecho principalmente en Zsh y combina historial, archivos del directorio actual, completado con Tab y una vista tipo arbol para navegar carpetas con `cd`.
 
 ## Que hace
 
 - Sugiere comandos recientes del historial que coinciden con lo que estas escribiendo.
 - Sugiere archivos y carpetas del directorio actual.
 - Permite usar `Tab` para abrir sugerencias de completado.
-- Completa ramas locales y remotas con `Tab` en `git pull origin` y `git push origin`.
+- Completa ramas locales y remotas con `Tab` en `git pull origin`, `git push origin` y `git checkout`.
 - Muestra una vista tipo arbol cuando el contexto es `cd`, para elegir carpetas de forma visual.
 - Usa las teclas de flecha para moverte por el panel.
 - Mantiene lo que estas escribiendo como primera opcion del panel.
@@ -20,6 +20,7 @@ Plugin para Oh My Zsh que muestra un panel flotante de sugerencias mientras escr
 
 - Zsh.
 - Oh My Zsh instalado.
+- Python 3 para leer `settings.json`.
 - Git, si quieres instalarlo desde GitHub.
 
 ## Instalacion en un ambiente nuevo
@@ -64,7 +65,7 @@ Controles principales:
 | `Esc` | Cerrar el panel |
 | `Backspace` / `Delete` | Editar y actualizar sugerencias |
 
-En repositorios Git, `Tab` despues de `git pull origin` o `git push origin` muestra ramas locales primero y ramas remotas de `origin` despues. Las remotas se insertan sin el prefijo `origin/`.
+En repositorios Git, `Tab` despues de `git pull origin`, `git push origin` o `git checkout` muestra ramas locales primero y ramas remotas de `origin` despues. Las remotas se insertan sin el prefijo `origin/`.
 
 Para navegar carpetas, escribe:
 
@@ -76,59 +77,76 @@ El plugin puede mostrar una vista tipo arbol con carpetas disponibles. Seleccion
 
 ## Configuracion
 
-Puedes ajustar estas variables antes de cargar Oh My Zsh en tu `~/.zshrc`:
+La configuracion vive en `settings.json`. JSON permite listas claras y deja listo el camino para snippets personalizados sin inventar separadores como `|`.
+
+El orden de prioridad es:
+
+1. `settings.json` del usuario.
+2. `example.settings.json` incluido en el plugin.
+
+Para crear tu configuracion:
 
 ```zsh
-ZSH_TREE_AUTOSUGGEST_MAX_ROWS=8
-ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT=50
-ZSH_TREE_AUTOSUGGEST_FILE_LIMIT=50
-ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS=1
-ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE=1
-ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH=1
-ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT=50
-ZSH_TREE_AUTOSUGGEST_BORDER_STYLE=single
-ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
-ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
-ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
-ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION=1
+mkdir -p "$HOME/.config/zsh_tree_autosuggestions"
+cp "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh_tree_autosuggestions/example.settings.json" \
+  "$HOME/.config/zsh_tree_autosuggestions/settings.json"
+$EDITOR "$HOME/.config/zsh_tree_autosuggestions/settings.json"
 ```
 
-Ejemplo:
+Ejemplo de `settings.json`:
+
+```json
+{
+  "maxRows": 10,
+  "historySuggestionLimit": 5,
+  "lsTreeDepth": 2,
+  "historyStopPrefixes": [
+    "git commit -m \"",
+    "gh issue create --title "
+  ],
+  "customSnippets": [
+    {
+      "trigger": "gst",
+      "command": "git status"
+    }
+  ]
+}
+```
+
+`customSnippets` queda reservado para la siguiente version de sugerencias personalizadas; ya puede vivir en el JSON sin tener que cambiar el formato despues.
+
+Si necesitas mover el archivo, define solo esta variable antes de cargar Oh My Zsh:
 
 ```zsh
-ZSH_TREE_AUTOSUGGEST_MAX_ROWS=10
-ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH=2
-
-plugins=(
-  git
-  zsh_tree_autosuggestions
-)
+ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE="$HOME/.config/zsh_tree_autosuggestions/settings.json"
 ```
 
 Opciones disponibles:
 
-| Variable | Valor default | Descripcion |
+| Llave JSON | Valor default | Descripcion |
 | --- | ---: | --- |
-| `ZSH_TREE_AUTOSUGGEST_MAX_ROWS` | `8` | Numero maximo de filas visibles en el panel. |
-| `ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT` | `50` | Cantidad de comandos recientes que revisa del historial. |
-| `ZSH_TREE_AUTOSUGGEST_FILE_LIMIT` | `50` | Limite de archivos/carpetas sugeridos. |
-| `ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS` | `1` | Activa o desactiva sugerencias al presionar `Tab`. |
-| `ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE` | `1` | Activa o desactiva la vista tipo arbol para `cd`. |
-| `ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH` | `1` | Profundidad de la vista tipo arbol. |
-| `ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT` | `50` | Limite de entradas en la vista tipo arbol. |
-| `ZSH_TREE_AUTOSUGGEST_BORDER_STYLE` | `single` | Estilo del borde del panel. |
-| `ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK` | `1` | Activa o desactiva la revision de actualizaciones del plugin. |
-| `ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL` | `86400` | Tiempo minimo entre revisiones, en segundos. |
-| `ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
-| `ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION` | `1` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
+| `maxRows` | `8` | Numero maximo de filas visibles en el panel. |
+| `historyLimit` | `50` | Cantidad de comandos recientes que revisa del historial. |
+| `historySuggestionLimit` | `5` | Numero maximo de sugerencias unicas del historial que muestra para el comando escrito. |
+| `fileLimit` | `50` | Limite de archivos/carpetas sugeridos. |
+| `enableTabCompletions` | `true` | Activa o desactiva sugerencias al presionar `Tab`. |
+| `enableCdTree` | `true` | Activa o desactiva la vista tipo arbol para `cd`. |
+| `lsTreeDepth` | `1` | Profundidad de la vista tipo arbol. |
+| `lsTreeLimit` | `50` | Limite de entradas en la vista tipo arbol. |
+| `borderStyle` | `single` | Estilo del borde del panel. |
+| `enableUpdateCheck` | `true` | Activa o desactiva la revision de actualizaciones del plugin. |
+| `updateCheckInterval` | `86400` | Tiempo minimo entre revisiones, en segundos. |
+| `keyTimeout` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
+| `showTypedOption` | `true` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
+| `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente, pero no completar mas alla del texto configurado. |
+| `customSnippets` | `[]` | Snippets personalizados reservados para una siguiente version. |
 
-Usa `0` para desactivar opciones booleanas:
+Con esa configuracion, si existe `git commit -m "mensaje privado"` en tu historial:
 
-```zsh
-ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE=0
-ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS=0
-ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=0
-```
+- Al escribir `git comm`, la sugerencia sera `git commit -m "`.
+- Al escribir `git commit -m "`, ya no apareceran sugerencias mas largas de historial para ese comando.
+
+Usa `false` para desactivar opciones booleanas.
 
 ## Revision de actualizaciones
 
@@ -143,14 +161,18 @@ Ejecuta: git -C "$HOME/.oh-my-zsh/custom/plugins/zsh_tree_autosuggestions" pull 
 
 Para revisar en cada terminal nueva:
 
-```zsh
-ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=0
+```json
+{
+  "updateCheckInterval": 0
+}
 ```
 
 Para desactivar la revision:
 
-```zsh
-ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=0
+```json
+{
+  "enableUpdateCheck": false
+}
 ```
 
 Esta funcion solo se activa cuando `zsh_tree_autosuggestions` es un repositorio Git independiente con upstream configurado. Si la carpeta esta dentro del repo completo de Oh My Zsh, no revisa actualizaciones para evitar falsos avisos.
@@ -160,6 +182,7 @@ Esta funcion solo se activa cuando `zsh_tree_autosuggestions` es un repositorio 
 ```text
 zsh_tree_autosuggestions/
 ├── README.md
+├── example.settings.json
 └── zsh_tree_autosuggestions.plugin.zsh
 ```
 
