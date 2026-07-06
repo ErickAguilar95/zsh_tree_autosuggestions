@@ -12,7 +12,6 @@
   "updateCheckInterval": 86400,
   "keyTimeout": 1,
   "showTypedOption": true,
-  "customSnippetsShow": false,
   "historyStopPrefixes": [
     "git commit -m \"",
     "gh issue create --title "

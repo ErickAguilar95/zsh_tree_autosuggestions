@@ -43,7 +43,6 @@ scalar_keys = {
     "updateCheckInterval": "ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL",
     "keyTimeout": "ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT",
     "showTypedOption": "ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION",
-    "customSnippetsShow": "ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_SHOW",
 }
 
 def scalar_to_string(value):
@@ -70,21 +69,6 @@ if isinstance(prefixes, list):
 
 snippets = data.get("customSnippets")
 if isinstance(snippets, list):
-    triggers = []
-    commands = []
-    for snippet in snippets:
-        if not isinstance(snippet, dict):
-            continue
-        trigger = scalar_to_string(snippet.get("trigger"))
-        command = scalar_to_string(snippet.get("command"))
-        if not trigger or not command:
-            continue
-        triggers.append(trigger)
-        commands.append(command)
-    quoted_triggers = " ".join(shlex.quote(item) for item in triggers)
-    quoted_commands = " ".join(shlex.quote(item) for item in commands)
-    print(f"typeset -ga ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS=( {quoted_triggers} )")
-    print(f"typeset -ga ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS=( {quoted_commands} )")
     value = json.dumps(snippets, ensure_ascii=False, separators=(",", ":"))
     print(f"typeset -g ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_JSON={shlex.quote(value)}")
 PY
@@ -97,10 +81,6 @@ _zsh_tree_autosuggest_load_json "$ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE"
 
 (( ! ${+ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES} )) &&
 typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=()
-(( ! ${+ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS} )) &&
-typeset -ga ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS=()
-(( ! ${+ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS} )) &&
-typeset -ga ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS=()
 
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS
@@ -293,27 +273,6 @@ _zsh_tree_autosuggest_collect_history() {
 	done
 }
 
-_zsh_tree_autosuggest_collect_custom_snippets() {
-	emulate -L zsh
-	local prefix="$BUFFER"
-	local trigger command
-	local -i index count=0 limit="$ZSH_TREE_AUTOSUGGEST_FILE_LIMIT"
-
-	(( ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_SHOW )) || return
-	[[ -n "$prefix" ]] || return
-	[[ "$limit" == <-> ]] || limit=50
-	(( limit > 0 )) || return
-
-	for (( index=1; index<=${#ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS}; index++ )); do
-		trigger="${ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS[index]}"
-		command="${ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS[index]}"
-		[[ -n "$command" && "$command" != "$prefix" ]] || continue
-		[[ "$trigger" == "$prefix"* || "$command" == "$prefix"* ]] || continue
-		_zsh_tree_autosuggest_unique_push _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS "$command"
-		(( ++count >= limit )) && break
-	done
-}
-
 _zsh_tree_autosuggest_collect_files() {
 	emulate -L zsh
 	setopt local_options null_glob
@@ -467,7 +426,6 @@ _zsh_tree_autosuggest_collect_main() {
 
 	_zsh_tree_autosuggest_collect_cd_tree
 	(( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} )) && return
-	_zsh_tree_autosuggest_collect_custom_snippets
 	_zsh_tree_autosuggest_collect_history
 	_zsh_tree_autosuggest_collect_files
 }
