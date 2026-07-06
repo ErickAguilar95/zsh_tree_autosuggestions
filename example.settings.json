@@ -18,8 +18,8 @@
   ],
   "customSnippets": [
     {
-      "trigger": "gst",
-      "command": "git status"
+      "trigger": "to_work",
+      "command": "cd /Users/erick/Dev/infotec"
     }
   ]
 }

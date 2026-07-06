@@ -5,6 +5,8 @@ typeset -g _ZSH_TREE_AUTOSUGGEST_PLUGIN_DIR="${${(%):-%x}:A:h}"
 
 (( ! ${+ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE} )) &&
 typeset -g ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/zsh_tree_autosuggestions/settings.json"
+(( ! ${+ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE} )) &&
+typeset -g ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/zsh_tree_autosuggestions/rejected-commands"
 
 _zsh_tree_autosuggest_load_json() {
 	emulate -L zsh
@@ -83,6 +85,7 @@ _zsh_tree_autosuggest_load_json "$ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE"
 typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=()
 
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
+typeset -ga _ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_TAB_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_LS_TREE_VALUES
@@ -90,6 +93,9 @@ typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE
 typeset -ga _ZSH_TREE_AUTOSUGGEST_ENTRY_KIND
+typeset -ga _ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS
+typeset -ga _ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS
+typeset -ga _ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS
 typeset -gA _ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE
 typeset -gi _ZSH_TREE_AUTOSUGGEST_VISIBLE=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_SELECTED=0
@@ -111,9 +117,83 @@ typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_ESCAPE_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_SELF_INSERT_WIDGET=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_LINE_INIT=''
 typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_LINE_FINISH=''
+(( ! ${+_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER} )) &&
+typeset -g _ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER=''
 typeset -gi _ZSH_TREE_AUTOSUGGEST_HAS_DISPLAY=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_INIT=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_FINISH=0
+
+if (( $+functions[command_not_found_handler] )) &&
+   [[ "${functions[command_not_found_handler]}" != *"_zsh_tree_autosuggest_record_rejected_command"* ]]; then
+	functions[_zsh_tree_autosuggest_orig_command_not_found_handler]="${functions[command_not_found_handler]}"
+	_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER="_zsh_tree_autosuggest_orig_command_not_found_handler"
+fi
+
+_zsh_tree_autosuggest_load_custom_snippets() {
+	emulate -L zsh
+	local snippets_json="${ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_JSON:-}"
+	local assignments
+
+	_ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS=()
+	_ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS=()
+
+	[[ -n "$snippets_json" ]] || return
+	(( $+commands[python3] )) || return
+
+	assignments="$(python3 - "$snippets_json" <<'PY'
+import json
+import shlex
+import sys
+
+try:
+    snippets = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(0)
+
+if not isinstance(snippets, list):
+    sys.exit(0)
+
+triggers = []
+commands = []
+
+for snippet in snippets:
+    if not isinstance(snippet, dict):
+        continue
+    trigger = snippet.get("trigger")
+    command = snippet.get("command")
+    if not isinstance(trigger, str) or not isinstance(command, str):
+        continue
+    if not trigger or not command:
+        continue
+    triggers.append(trigger)
+    commands.append(command)
+
+quoted_triggers = " ".join(shlex.quote(item) for item in triggers)
+quoted_commands = " ".join(shlex.quote(item) for item in commands)
+print(f"typeset -ga _ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS=( {quoted_triggers} )")
+print(f"typeset -ga _ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS=( {quoted_commands} )")
+PY
+)" || return
+	eval "$assignments"
+}
+
+_zsh_tree_autosuggest_load_custom_snippets
+
+_zsh_tree_autosuggest_load_rejected_commands() {
+	emulate -L zsh
+	local line
+
+	_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS=()
+	[[ -r "$ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE" ]] || return
+
+	while IFS= read -r line; do
+		[[ -n "$line" ]] || continue
+		(( ${_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS[(Ie)$line]} )) && continue
+		_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS+=( "$line" )
+	done < "$ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE"
+}
+
+_zsh_tree_autosuggest_load_rejected_commands
 
 _zsh_tree_autosuggest_strip_ansi() {
 	emulate -L zsh
@@ -171,12 +251,13 @@ _zsh_tree_autosuggest_current_token() {
 	print -r -- "$token"
 }
 
-_zsh_tree_autosuggest_command_is_valid() {
+_zsh_tree_autosuggest_line_command_name() {
 	emulate -L zsh
 	local line="$1"
 	local token command
 	local -a tokens precommands
 
+	REPLY=''
 	tokens=( ${(z)line} )
 	precommands=( builtin command exec noglob time coproc )
 
@@ -185,34 +266,98 @@ _zsh_tree_autosuggest_command_is_valid() {
 		[[ -z "$command" ]] && continue
 		[[ "$command" =~ '^[A-Za-z_][A-Za-z0-9_]*(\[[^]]+\])?=' ]] && continue
 		(( ${precommands[(Ie)$command]} )) && continue
-
-		if [[ "$command" == */* ]]; then
-			[[ -x "${~command}" ]] && return 0
-			return 1
-		fi
-
-		if [[ -n "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" ]]; then
-			[[ "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" == 1 ]]
-			return
-		fi
-
-		(( ${+commands[$command]} ||
-		   ${+builtins[$command]} ||
-		   ${+functions[$command]} ||
-		   ${+aliases[$command]} ||
-		   ${reswords[(Ie)$command]} )) && {
-			_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
-			return 0
-		}
-
-		if whence -w "$command" >/dev/null 2>&1; then
-			_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
-			return 0
-		fi
-		_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=0
-		return 1
+		REPLY="$command"
+		return 0
 	done
 
+	return 1
+}
+
+_zsh_tree_autosuggest_command_is_rejected() {
+	emulate -L zsh
+	local command="$1"
+
+	[[ -n "$command" ]] || return 1
+	(( ${_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS[(Ie)$command]} ))
+}
+
+_zsh_tree_autosuggest_line_command_is_rejected() {
+	emulate -L zsh
+	local line="$1"
+
+	_zsh_tree_autosuggest_line_command_name "$line" || return 1
+	_zsh_tree_autosuggest_command_is_rejected "$REPLY"
+}
+
+_zsh_tree_autosuggest_record_rejected_command() {
+	emulate -L zsh
+	local command="$1"
+	local cache_dir
+
+	[[ -n "$command" ]] || return
+	[[ "$command" == */* ]] && return
+	(( ${_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS[(Ie)$command]} )) && return
+
+	_ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS+=( "$command" )
+	cache_dir="${ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE:h}"
+	mkdir -p "$cache_dir" 2>/dev/null || return
+	print -r -- "$command" >> "$ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE" 2>/dev/null
+}
+
+_zsh_tree_autosuggest_command_not_found_handler() {
+	emulate -L zsh
+	local command="$1"
+
+	_zsh_tree_autosuggest_record_rejected_command "$command"
+
+	if [[ -n "$_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER" &&
+	      -n "${functions[$_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER]}" ]]; then
+		"$_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER" "$@"
+		return $?
+	fi
+
+	print -u2 -- "zsh: command not found: $command"
+	return 127
+}
+
+command_not_found_handler() {
+	_zsh_tree_autosuggest_command_not_found_handler "$@"
+}
+
+_zsh_tree_autosuggest_command_is_valid() {
+	emulate -L zsh
+	local line="$1"
+	local command
+
+	_zsh_tree_autosuggest_line_command_name "$line" || return 1
+	command="$REPLY"
+
+	_zsh_tree_autosuggest_command_is_rejected "$command" && return 1
+
+	if [[ "$command" == */* ]]; then
+		[[ -x "${~command}" ]] && return 0
+		return 1
+	fi
+
+	if [[ -n "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" ]]; then
+		[[ "${_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]}" == 1 ]]
+		return
+	fi
+
+	(( ${+commands[$command]} ||
+	   ${+builtins[$command]} ||
+	   ${+functions[$command]} ||
+	   ${+aliases[$command]} ||
+	   ${reswords[(Ie)$command]} )) && {
+		_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
+		return 0
+	}
+
+	if whence -w "$command" >/dev/null 2>&1; then
+		_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=1
+		return 0
+	fi
+	_ZSH_TREE_AUTOSUGGEST_COMMAND_VALID_CACHE[$command]=0
 	return 1
 }
 
@@ -225,20 +370,52 @@ _zsh_tree_autosuggest_buffer_command_is_valid() {
 	_zsh_tree_autosuggest_command_is_valid "$before"
 }
 
+_zsh_tree_autosuggest_stop_prefix_stem() {
+	emulate -L zsh
+	local stop_prefix="$1"
+	local token part
+	local -a tokens stem
+
+	REPLY=''
+	tokens=( ${(z)stop_prefix} )
+
+	for token in "${tokens[@]}"; do
+		part="${(Q)token}"
+		[[ -n "$part" ]] || continue
+		[[ "$part" == -* ]] && break
+		stem+=( "$part" )
+	done
+
+	(( ${#stem} )) || return 1
+	REPLY="${(j: :)stem}"
+}
+
 _zsh_tree_autosuggest_history_candidate() {
 	emulate -L zsh
 	local prefix="$1"
 	local line="$2"
-	local stop_prefix
+	local stop_prefix stop_stem remainder
 
 	REPLY="$line"
 
 	for stop_prefix in "${ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES[@]}"; do
-		[[ -n "$stop_prefix" && "$line" == "$stop_prefix"* ]] || continue
+		[[ -n "$stop_prefix" ]] || continue
 
-		[[ "$stop_prefix" == "$prefix"* ]] || return 1
-		REPLY="$stop_prefix"
-		return 0
+		if [[ "$line" == "$stop_prefix"* ]]; then
+			[[ "$stop_prefix" == "$prefix"* ]] || return 1
+			REPLY="$stop_prefix"
+			return 0
+		fi
+
+		[[ "$stop_prefix" == "$prefix"* ]] || continue
+		_zsh_tree_autosuggest_stop_prefix_stem "$stop_prefix" || continue
+		stop_stem="$REPLY"
+		REPLY="$line"
+
+		remainder="${line[$(( $#stop_stem + 1 )),-1]}"
+		if [[ "$line" == "$stop_stem"* && ( -z "$remainder" || "${remainder[1]}" == [[:space:]] ) ]]; then
+			return 1
+		fi
 	done
 
 	return 0
@@ -421,13 +598,30 @@ _zsh_tree_autosuggest_collect_cd_tree() {
 _zsh_tree_autosuggest_collect_main() {
 	emulate -L zsh
 	_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS=()
+	_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_VALUES=()
 
+	_zsh_tree_autosuggest_collect_snippets
 	_zsh_tree_autosuggest_collect_cd_tree
 	(( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} )) && return
 	_zsh_tree_autosuggest_collect_history
 	_zsh_tree_autosuggest_collect_files
+}
+
+_zsh_tree_autosuggest_collect_snippets() {
+	emulate -L zsh
+	local trigger command
+	local -i index
+
+	[[ -n "$BUFFER" ]] || return
+
+	for (( index=1; index<=${#_ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS}; index++ )); do
+		trigger="${_ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_TRIGGERS[index]}"
+		command="${_ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPET_COMMANDS[index]}"
+		[[ "$BUFFER" == "$trigger" && "$command" != "$BUFFER" ]] || continue
+		_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS+=( "$command" )
+	done
 }
 
 _zsh_tree_autosuggest_collect_tab_commands() {
@@ -512,6 +706,7 @@ _zsh_tree_autosuggest_collect_git_branches() {
 
 _zsh_tree_autosuggest_collect_tab() {
 	emulate -L zsh
+	_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_VALUES=()
@@ -528,6 +723,7 @@ _zsh_tree_autosuggest_collect_tab() {
 _zsh_tree_autosuggest_build_entries() {
 	emulate -L zsh
 	local item value
+	local -a main_items
 	local -i index first_selectable=0 has_suggestions=0
 
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT=()
@@ -535,13 +731,29 @@ _zsh_tree_autosuggest_build_entries() {
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE=()
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND=()
 
-	has_suggestions=$(( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS} ))
-	if (( ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION && has_suggestions && $#BUFFER )); then
+	has_suggestions=$(( ${#_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS} ))
+	if (( ${#_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS} )); then
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "Snippets" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 0 )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "header" )
+
+		for item in "${_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS[@]}"; do
+			_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "$item" )
+			_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$item" )
+			_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
+			_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "snippet" )
+			(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
+		done
+	fi
+
+	if (( ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION && has_suggestions && $#BUFFER )) &&
+	   ! _zsh_tree_autosuggest_line_command_is_rejected "$BUFFER"; then
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "$BUFFER" )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$BUFFER" )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "current" )
-		first_selectable=1
+		(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 	fi
 
 	if (( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} )); then
@@ -566,13 +778,18 @@ _zsh_tree_autosuggest_build_entries() {
 		done
 	fi
 
-	if (( ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} )); then
+	for item in "${_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS[@]}"; do
+		_zsh_tree_autosuggest_line_command_is_rejected "$item" && continue
+		main_items+=( "$item" )
+	done
+
+	if (( ${#main_items} )); then
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "Sugerencias" )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "" )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 0 )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "header" )
 
-		for item in "${_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS[@]}"; do
+		for item in "${main_items[@]}"; do
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "$item" )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$item" )
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
@@ -736,6 +953,7 @@ _zsh_tree_autosuggest_clear() {
 	_ZSH_TREE_AUTOSUGGEST_SELECTED=0
 	_ZSH_TREE_AUTOSUGGEST_SCROLL=0
 	_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS=()
+	_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS=()
 	_ZSH_TREE_AUTOSUGGEST_LS_TREE_VALUES=()

@@ -113,7 +113,13 @@ Ejemplo de `settings.json`:
 }
 ```
 
-`customSnippets` queda reservado para la siguiente version de sugerencias personalizadas; ya puede vivir en el JSON sin tener que cambiar el formato despues.
+`customSnippets` define atajos personalizados. Cuando el texto escrito coincide con `trigger`, el `command` aparece bajo la seccion `Snippets` como primera recomendacion seleccionable. Por ejemplo, `gst` sugiere `git status`.
+
+Los comandos que terminan en `command not found` se guardan en una lista de bloqueo local y dejan de aparecer en sugerencias de historial. Para reiniciar esa lista:
+
+```zsh
+rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/zsh_tree_autosuggestions/rejected-commands"
+```
 
 Si necesitas mover el archivo, define solo esta variable antes de cargar Oh My Zsh:
 
@@ -138,12 +144,13 @@ Opciones disponibles:
 | `updateCheckInterval` | `86400` | Tiempo minimo entre revisiones, en segundos. |
 | `keyTimeout` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
 | `showTypedOption` | `true` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
-| `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente, pero no completar mas alla del texto configurado. |
+| `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente; tambien bloquean otras sugerencias del mismo comando base mientras escribes hacia ese prefijo. |
 | `customSnippets` | `[]` | Snippets personalizados reservados para una siguiente version. |
 
 Con esa configuracion, si existe `git commit -m "mensaje privado"` en tu historial:
 
 - Al escribir `git comm`, la sugerencia sera `git commit -m "`.
+- Al escribir `git commit`, no apareceran variantes del historial como `git commit --amend` o mensajes previos.
 - Al escribir `git commit -m "`, ya no apareceran sugerencias mas largas de historial para ese comando.
 
 Usa `false` para desactivar opciones booleanas.
