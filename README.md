@@ -104,6 +104,7 @@ Ejemplo de `settings.json`:
     "git commit -m \"",
     "gh issue create --title "
   ],
+  "customSnippetsShow": true,
   "customSnippets": [
     {
       "trigger": "gst",
@@ -113,7 +114,7 @@ Ejemplo de `settings.json`:
 }
 ```
 
-`customSnippets` queda reservado para la siguiente version de sugerencias personalizadas; ya puede vivir en el JSON sin tener que cambiar el formato despues.
+Cuando `customSnippetsShow` es `false`, los snippets no aparecen en sugerencias. Cuando es `true`, aparecen si lo escrito coincide con el inicio de `trigger` o `command`; al aceptarlos se inserta `command`.
 
 Si necesitas mover el archivo, define solo esta variable antes de cargar Oh My Zsh:
 
@@ -138,8 +139,9 @@ Opciones disponibles:
 | `updateCheckInterval` | `86400` | Tiempo minimo entre revisiones, en segundos. |
 | `keyTimeout` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
 | `showTypedOption` | `true` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
+| `customSnippetsShow` | `false` | Activa o desactiva sugerencias desde `customSnippets`. |
 | `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente, pero no completar mas alla del texto configurado. |
-| `customSnippets` | `[]` | Snippets personalizados reservados para una siguiente version. |
+| `customSnippets` | `[]` | Snippets personalizados con `trigger` y `command`. |
 
 Con esa configuracion, si existe `git commit -m "mensaje privado"` en tu historial:
 

@@ -12,9 +12,15 @@
   "updateCheckInterval": 86400,
   "keyTimeout": 1,
   "showTypedOption": true,
+  "customSnippetsShow": false,
   "historyStopPrefixes": [
     "git commit -m \"",
     "gh issue create --title "
   ],
-  "customSnippets": []
+  "customSnippets": [
+    {
+      "trigger": "gst",
+      "command": "git status"
+    }
+  ]
 }
