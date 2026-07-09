@@ -1,6 +1,6 @@
 {
   "maxRows": 8,
-  "historyLimit": 50,
+  "historyLimit": 100,
   "historySuggestionLimit": 5,
   "fileLimit": 50,
   "enableTabCompletions": true,
@@ -16,6 +16,10 @@
     "git commit -m \"",
     "git push origin ",
     "gh issue create --title "
+  ],
+  "rejectedCommandResponsePatterns": [
+    "command not found",
+    "OCI runtime exec failed: exec failed: unable to start container process: exec:"
   ],
   "customSnippets": [
     {

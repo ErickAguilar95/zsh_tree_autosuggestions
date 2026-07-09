@@ -69,6 +69,13 @@ if isinstance(prefixes, list):
     quoted = " ".join(shlex.quote(item) for item in values)
     print(f"typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=( {quoted} )")
 
+response_patterns = data.get("rejectedCommandResponsePatterns")
+if isinstance(response_patterns, list):
+    values = [scalar_to_string(item) for item in response_patterns]
+    values = [item for item in values if item is not None]
+    quoted = " ".join(shlex.quote(item) for item in values)
+    print(f"typeset -ga ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS=( {quoted} )")
+
 snippets = data.get("customSnippets")
 if isinstance(snippets, list):
     value = json.dumps(snippets, ensure_ascii=False, separators=(",", ":"))
@@ -83,6 +90,8 @@ _zsh_tree_autosuggest_load_json "$ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE"
 
 (( ! ${+ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES} )) &&
 typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=()
+(( ! ${+ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS} )) &&
+typeset -ga ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS=()
 
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS
@@ -302,6 +311,43 @@ _zsh_tree_autosuggest_record_rejected_command() {
 	cache_dir="${ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE:h}"
 	mkdir -p "$cache_dir" 2>/dev/null || return
 	print -r -- "$command" >> "$ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE" 2>/dev/null
+}
+
+_zsh_tree_autosuggest_response_matches_rejected_pattern() {
+	emulate -L zsh
+	local response="$1"
+	local pattern
+
+	[[ -n "$response" ]] || return 1
+	for pattern in "${ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS[@]}"; do
+		[[ -n "$pattern" ]] || continue
+		[[ "$response" == *"$pattern"* ]] && return 0
+	done
+	return 1
+}
+
+_zsh_tree_autosuggest_command_from_failed_response() {
+	emulate -L zsh
+	local line="$1"
+	local response="$2"
+
+	REPLY=''
+	if [[ "$response" =~ 'exec: "([^"]+)"' ]]; then
+		REPLY="${match[1]}"
+		return 0
+	fi
+
+	_zsh_tree_autosuggest_line_command_name "$line" || return 1
+}
+
+zsh_tree_autosuggest_reject_command_from_response() {
+	emulate -L zsh
+	local line="$1"
+	local response="$2"
+
+	_zsh_tree_autosuggest_response_matches_rejected_pattern "$response" || return 1
+	_zsh_tree_autosuggest_command_from_failed_response "$line" "$response" || return 1
+	_zsh_tree_autosuggest_record_rejected_command "$REPLY"
 }
 
 _zsh_tree_autosuggest_command_not_found_handler() {

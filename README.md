@@ -104,6 +104,10 @@ Ejemplo de `settings.json`:
     "git commit -m \"",
     "gh issue create --title "
   ],
+  "rejectedCommandResponsePatterns": [
+    "command not found",
+    "OCI runtime exec failed: exec failed: unable to start container process: exec:"
+  ],
   "customSnippets": [
     {
       "trigger": "gst",
@@ -115,7 +119,17 @@ Ejemplo de `settings.json`:
 
 `customSnippets` define atajos personalizados. Cuando el texto escrito coincide con `trigger`, el `command` aparece bajo la seccion `Snippets` como primera recomendacion seleccionable. Por ejemplo, `gst` sugiere `git status`.
 
-Los comandos que terminan en `command not found` se guardan en una lista de bloqueo local y dejan de aparecer en sugerencias de historial. Para reiniciar esa lista:
+Los comandos que terminan en `command not found` se guardan en una lista de bloqueo local y dejan de aparecer en sugerencias de historial. Tambien puedes definir `rejectedCommandResponsePatterns` para reconocer respuestas de herramientas que envuelven otros comandos, por ejemplo Docker con `OCI runtime exec failed: exec failed: unable to start container process: exec:`.
+
+Si una integracion captura la respuesta de un comando, puede registrar el comando fallido asi:
+
+```zsh
+zsh_tree_autosuggest_reject_command_from_response "$cmd" "$stderr"
+```
+
+Cuando la respuesta contiene `exec: "nombre"`, se registra `nombre`; si no, se registra el primer comando de `$cmd`.
+
+Para reiniciar esa lista:
 
 ```zsh
 rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/zsh_tree_autosuggestions/rejected-commands"
@@ -145,6 +159,7 @@ Opciones disponibles:
 | `keyTimeout` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
 | `showTypedOption` | `true` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
 | `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente; tambien bloquean otras sugerencias del mismo comando base mientras escribes hacia ese prefijo. |
+| `rejectedCommandResponsePatterns` | `["command not found", "OCI runtime exec failed: exec failed: unable to start container process: exec:"]` | Fragmentos de respuesta que una integracion puede usar para mandar comandos fallidos a `rejected-commands`. |
 | `customSnippets` | `[]` | Snippets personalizados reservados para una siguiente version. |
 
 Con esa configuracion, si existe `git commit -m "mensaje privado"` en tu historial:
