@@ -801,6 +801,14 @@ _zsh_tree_autosuggest_build_entries() {
 	_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND=()
 
 	has_suggestions=$(( ${#_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS} + ${#_ZSH_TREE_AUTOSUGGEST_TAB_ITEMS} ))
+	if (( ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION && has_suggestions && $#BUFFER )); then
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "Current text: $BUFFER" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$BUFFER" )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
+		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "current" )
+		(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
+	fi
+
 	if (( ${#_ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS} )); then
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "Snippets" )
 		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "" )
@@ -814,15 +822,6 @@ _zsh_tree_autosuggest_build_entries() {
 			_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "snippet" )
 			(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 		done
-	fi
-
-	if (( ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION && has_suggestions && $#BUFFER )) &&
-	   ! _zsh_tree_autosuggest_line_command_is_rejected "$BUFFER"; then
-		_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT+=( "$BUFFER" )
-		_ZSH_TREE_AUTOSUGGEST_ENTRY_VALUE+=( "$BUFFER" )
-		_ZSH_TREE_AUTOSUGGEST_ENTRY_SELECTABLE+=( 1 )
-		_ZSH_TREE_AUTOSUGGEST_ENTRY_KIND+=( "current" )
-		(( first_selectable )) || first_selectable="${#_ZSH_TREE_AUTOSUGGEST_ENTRY_TEXT}"
 	fi
 
 	if (( ${#_ZSH_TREE_AUTOSUGGEST_LS_TREE_ITEMS} )); then
