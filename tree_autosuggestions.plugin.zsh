@@ -8,6 +8,28 @@ typeset -g ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}
 (( ! ${+ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE} )) &&
 typeset -g ZSH_TREE_AUTOSUGGEST_REJECTED_COMMANDS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/zsh_tree_autosuggestions/rejected-commands"
 
+typeset -g ZSH_TREE_AUTOSUGGEST_MAX_ROWS=8
+typeset -g ZSH_TREE_AUTOSUGGEST_HISTORY_LIMIT=100
+typeset -g ZSH_TREE_AUTOSUGGEST_HISTORY_SUGGESTION_LIMIT=5
+typeset -g ZSH_TREE_AUTOSUGGEST_FILE_LIMIT=50
+typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_TAB_COMPLETIONS=1
+typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_CD_TREE=1
+typeset -g ZSH_TREE_AUTOSUGGEST_LS_TREE_DEPTH=1
+typeset -g ZSH_TREE_AUTOSUGGEST_LS_TREE_LIMIT=50
+typeset -g ZSH_TREE_AUTOSUGGEST_BORDER_STYLE=single
+typeset -g ZSH_TREE_AUTOSUGGEST_ENABLE_UPDATE_CHECK=1
+typeset -g ZSH_TREE_AUTOSUGGEST_UPDATE_CHECK_INTERVAL=86400
+typeset -g ZSH_TREE_AUTOSUGGEST_KEYTIMEOUT=1
+typeset -g ZSH_TREE_AUTOSUGGEST_SHOW_TYPED_OPTION=1
+typeset -g ZSH_TREE_AUTOSUGGEST_CUSTOM_SNIPPETS_JSON='[]'
+typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=(
+	'git commit -m "'
+)
+typeset -ga ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS=(
+	"command not found"
+	"OCI runtime exec failed: exec failed: unable to start container process: exec:"
+)
+
 _zsh_tree_autosuggest_load_json() {
 	emulate -L zsh
 	local settings_file="$1"
@@ -85,13 +107,7 @@ PY
 	eval "$assignments"
 }
 
-_zsh_tree_autosuggest_load_json "$_ZSH_TREE_AUTOSUGGEST_PLUGIN_DIR/example.settings.json"
 _zsh_tree_autosuggest_load_json "$ZSH_TREE_AUTOSUGGEST_SETTINGS_FILE"
-
-(( ! ${+ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES} )) &&
-typeset -ga ZSH_TREE_AUTOSUGGEST_HISTORY_STOP_PREFIXES=()
-(( ! ${+ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS} )) &&
-typeset -ga ZSH_TREE_AUTOSUGGEST_REJECTED_COMMAND_RESPONSE_PATTERNS=()
 
 typeset -ga _ZSH_TREE_AUTOSUGGEST_MAIN_ITEMS
 typeset -ga _ZSH_TREE_AUTOSUGGEST_SNIPPET_ITEMS
@@ -133,9 +149,16 @@ typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_INIT=0
 typeset -gi _ZSH_TREE_AUTOSUGGEST_IN_LINE_FINISH=0
 
 if (( $+functions[command_not_found_handler] )) &&
-   [[ "${functions[command_not_found_handler]}" != *"_zsh_tree_autosuggest_record_rejected_command"* ]]; then
+   [[ "${functions[command_not_found_handler]}" != *"_zsh_tree_autosuggest_record_rejected_command"* &&
+      "${functions[command_not_found_handler]}" != *"_zsh_tree_autosuggest_command_not_found_handler"* ]]; then
 	functions[_zsh_tree_autosuggest_orig_command_not_found_handler]="${functions[command_not_found_handler]}"
 	_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER="_zsh_tree_autosuggest_orig_command_not_found_handler"
+fi
+
+if [[ -n "$_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER" &&
+      "${functions[$_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER]}" == *"_zsh_tree_autosuggest_command_not_found_handler"* ]]; then
+	_ZSH_TREE_AUTOSUGGEST_ORIG_COMMAND_NOT_FOUND_HANDLER=''
+	unfunction _zsh_tree_autosuggest_orig_command_not_found_handler 2>/dev/null
 fi
 
 _zsh_tree_autosuggest_load_custom_snippets() {

@@ -81,8 +81,10 @@ La configuracion vive en `settings.json`. JSON permite listas claras y deja list
 
 El orden de prioridad es:
 
-1. `settings.json` del usuario.
-2. `example.settings.json` incluido en el plugin.
+1. `settings.json` del usuario, si existe.
+2. Defaults internos del plugin.
+
+`example.settings.json` solo es una plantilla para copiar y editar.
 
 Para crear tu configuracion:
 
@@ -146,7 +148,7 @@ Opciones disponibles:
 | Llave JSON | Valor default | Descripcion |
 | --- | ---: | --- |
 | `maxRows` | `8` | Numero maximo de filas visibles en el panel. |
-| `historyLimit` | `50` | Cantidad de comandos recientes que revisa del historial. |
+| `historyLimit` | `100` | Cantidad de comandos recientes que revisa del historial. |
 | `historySuggestionLimit` | `5` | Numero maximo de sugerencias unicas del historial que muestra para el comando escrito. |
 | `fileLimit` | `50` | Limite de archivos/carpetas sugeridos. |
 | `enableTabCompletions` | `true` | Activa o desactiva sugerencias al presionar `Tab`. |
@@ -158,9 +160,9 @@ Opciones disponibles:
 | `updateCheckInterval` | `86400` | Tiempo minimo entre revisiones, en segundos. |
 | `keyTimeout` | `1` | Valor maximo de `KEYTIMEOUT` para que `Esc` y secuencias de flechas respondan sin pausa perceptible. |
 | `showTypedOption` | `true` | Muestra lo escrito como primera opcion para evitar aceptar sugerencias por error con `Enter`. |
-| `historyStopPrefixes` | `["git commit -m \"", "gh issue create --title "]` | Prefijos de historial que se pueden sugerir parcialmente; tambien bloquean otras sugerencias del mismo comando base mientras escribes hacia ese prefijo. |
+| `historyStopPrefixes` | `["git commit -m \""]` | Prefijos de historial que se pueden sugerir parcialmente; tambien bloquean otras sugerencias del mismo comando base mientras escribes hacia ese prefijo. |
 | `rejectedCommandResponsePatterns` | `["command not found", "OCI runtime exec failed: exec failed: unable to start container process: exec:"]` | Fragmentos de respuesta que una integracion puede usar para mandar comandos fallidos a `rejected-commands`. |
-| `customSnippets` | `[]` | Snippets personalizados reservados para una siguiente version. |
+| `customSnippets` | `gpush`, `gpull` | Snippets personalizados. |
 
 Con esa configuracion, si existe `git commit -m "mensaje privado"` en tu historial:
 

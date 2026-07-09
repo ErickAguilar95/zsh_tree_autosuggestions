@@ -13,18 +13,19 @@
   "keyTimeout": 1,
   "showTypedOption": true,
   "historyStopPrefixes": [
-    "git commit -m \"",
-    "git push origin ",
-    "gh issue create --title "
+    "git commit -m \""
   ],
   "rejectedCommandResponsePatterns": [
-    "command not found",
-    "OCI runtime exec failed: exec failed: unable to start container process: exec:"
+    "command not found"
   ],
   "customSnippets": [
     {
-      "trigger": "to_work",
-      "command": "cd /Users/erick/Dev/infotec"
+      "trigger": "gpush",
+      "command": "git push origin \"$(git_current_branch)\""
+    },
+    {
+      "trigger": "gpull",
+      "command": "git pull origin \"$(git_current_branch)\""
     }
   ]
 }
